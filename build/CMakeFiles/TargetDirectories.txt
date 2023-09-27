@@ -1,3 +1,0 @@
-C:/Workspace/Custom_Serial_Terminal/build/CMakeFiles/SerialPortTerminal.dir
-C:/Workspace/Custom_Serial_Terminal/build/CMakeFiles/ALL_BUILD.dir
-C:/Workspace/Custom_Serial_Terminal/build/CMakeFiles/ZERO_CHECK.dir
