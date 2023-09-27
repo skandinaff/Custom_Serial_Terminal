@@ -1,0 +1,4 @@
+# CMake-generated files
+/build/
+/CMakeFiles/
+/CMakeCache.txt
