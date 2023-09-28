@@ -1,12 +1,14 @@
-#include <Windows.h>
-#include <iostream>
-#include <string>
-
+#include <QApplication>
+#include <QWidget>
+#include <QVBoxLayout>
+#include <QTextEdit>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QThread>
 #include <Windows.h>
 #include <iostream>
 #include <string>
 #include <thread>
-#include <atomic>
 
 const char* COM_PORT = "COM8";  // Change to the desired COM port
 const int BAUD_RATE = 115200;
@@ -14,24 +16,40 @@ const int BUFFER_SIZE = 256;
 
 std::atomic<bool> shouldExit(false);
 
-void ReadSerialData(HANDLE hSerial) {
+void ReadSerialData(HANDLE hSerial, QTextEdit* textArea) {
     char buffer[BUFFER_SIZE];
     DWORD bytesRead;
 
     while (!shouldExit) {
         if (ReadFile(hSerial, buffer, BUFFER_SIZE, &bytesRead, nullptr)) {
             if (bytesRead > 0) {
-                // Print received data to the console
-                std::cout.write(buffer, bytesRead);
-                std::cout.flush();  // Ensure the output is immediately visible
+                // Print received data to the text area
+                QString receivedData = QString::fromLatin1(buffer, bytesRead);
+                QMetaObject::invokeMethod(textArea, "append", Qt::QueuedConnection, Q_ARG(QString, receivedData));
             }
         }
     }
 }
 
-int main() {
-    HANDLE hSerial;
-    hSerial = CreateFileA(COM_PORT, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+int main(int argc, char* argv[]) {
+    QApplication app(argc, argv);
+
+    QWidget window;
+    window.setWindowTitle("Serial Port Terminal");
+
+    QVBoxLayout* layout = new QVBoxLayout(&window);
+
+    QTextEdit* textArea = new QTextEdit(&window);
+    layout->addWidget(textArea);
+
+    QLineEdit* inputField = new QLineEdit(&window);
+    layout->addWidget(inputField);
+
+    QPushButton* sendButton = new QPushButton("Send", &window);
+    layout->addWidget(sendButton);
+
+    // Create a thread for asynchronous serial data reading
+    HANDLE hSerial = CreateFileA(COM_PORT, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
     if (hSerial == INVALID_HANDLE_VALUE) {
         std::cerr << "Error opening serial port." << std::endl;
@@ -58,29 +76,25 @@ int main() {
         return 1;
     }
 
-    // Create a thread for asynchronous serial data reading
-    std::thread serialThread(ReadSerialData, hSerial);
+    std::thread serialThread(ReadSerialData, hSerial, textArea);
 
-    char userInput[BUFFER_SIZE];
-    DWORD bytesWritten;
-
-    while (true) {
-        std::cout << "Enter data to send (or 'exit' to quit): ";
-        std::cin.getline(userInput, BUFFER_SIZE);
-
-        if (strcmp(userInput, "exit") == 0) {
-            shouldExit = true;
-            break;
+    QObject::connect(sendButton, &QPushButton::clicked, [&]() {
+        if (serialThread.joinable()) {
+            if (!WriteFile(hSerial, inputField->text().toLatin1().data(), inputField->text().toLatin1().size(), nullptr, nullptr)) {
+                std::cerr << "Error writing to serial port." << std::endl;
+            }
         }
+    });
 
-        if (!WriteFile(hSerial, userInput, strlen(userInput), &bytesWritten, nullptr)) {
-            std::cerr << "Error writing to serial port." << std::endl;
+    QObject::connect(&window, &QWidget::destroyed, [&]() {
+        shouldExit = true;
+        if (serialThread.joinable()) {
+            serialThread.join();
         }
-    }
+        CloseHandle(hSerial);
+    });
 
-    // Wait for the serial thread to finish
-    serialThread.join();
+    window.show();
 
-    CloseHandle(hSerial);
-    return 0;
+    return app.exec();
 }
