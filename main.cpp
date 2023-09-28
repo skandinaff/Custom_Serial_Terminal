@@ -23,9 +23,13 @@ void ReadSerialData(HANDLE hSerial, QTextEdit* textArea) {
     while (!shouldExit) {
         if (ReadFile(hSerial, buffer, BUFFER_SIZE, &bytesRead, nullptr)) {
             if (bytesRead > 0) {
-                // Print received data to the text area
+                // Print received data to the GUI's text area
                 QString receivedData = QString::fromLatin1(buffer, bytesRead);
                 QMetaObject::invokeMethod(textArea, "append", Qt::QueuedConnection, Q_ARG(QString, receivedData));
+
+                // Print received data to the console
+                std::cout.write(buffer, bytesRead);
+                std::cout.flush();
             }
         }
     }
